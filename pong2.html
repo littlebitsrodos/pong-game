@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="el">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Table Tennis Pro - High Score Edition</title>
+    <style>
+        :root {
+            --primary: #05EDFF;
+            --accent: #FFD700;
+        }
+
+        body {
+            margin: 0;
+            background: #1a1a1a url('https://raw.githubusercontent.com/https-deeplearning-ai/lc-build-with-andrew-platform/main/img/tabletennis43.jpg') center/cover;
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #ui-top,
+        #ui-bottom {
+            width: 100%;
+            background: rgba(34, 34, 34, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 5;
+        }
+
+        #ui-top {
+            padding: 10px 0;
+            gap: 20px;
+            border-bottom: 2px solid var(--primary);
+        }
+
+        #ui-bottom {
+            padding: 15px 0;
+            gap: 60px;
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-group button {
+            padding: 8px 12px;
+            cursor: pointer;
+            border: 1px solid var(--primary);
+            background: transparent;
+            color: white;
+            transition: 0.2s;
+        }
+
+        .btn-group button.active {
+            background: var(--primary);
+            color: black;
+            font-weight: bold;
+        }
+
+        canvas {
+            border: 4px solid #fff;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            background: rgba(0, 100, 0, 0.6);
+        }
+
+        .score-box {
+            text-align: center;
+            min-width: 100px;
+        }
+
+        .score-val {
+            font-size: 32px;
+            font-weight: bold;
+            display: block;
+        }
+
+        .score-label {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .high-score {
+            color: var(--accent);
+            border-left: 2px solid var(--accent);
+            padding-left: 20px;
+        }
+
+        #win-msg {
+            position: absolute;
+            display: none;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border: 3px solid var(--primary);
+            text-align: center;
+            border-radius: 15px;
+            z-index: 10;
+        }
+
+        .shake {
+            animation: shake 0.15s linear;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            25% {
+                transform: translate(4px, 4px);
+            }
+
+            75% {
+                transform: translate(-4px, -4px);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-top">
+        <div class="btn-group">
+            <button onclick="setDifficulty('easy')" id="btn-easy">Easy</button>
+            <button onclick="setDifficulty('medium')" id="btn-medium" class="active">Medium</button>
+            <button onclick="setDifficulty('hard')" id="btn-hard">Hard</button>
+        </div>
+        <div>
+            <span>Target:</span>
+            <input type="number" id="winLimit" value="5" min="1" onchange="updateWinLimit()"
+                style="width:40px; background:#333; color:white; border:1px solid var(--primary);">
+        </div>
+        <button onclick="resetHighScore()"
+            style="font-size: 10px; background: none; border: 1px solid gray; color: gray; cursor: pointer;">Clear
+            Best</button>
+    </div>
+
+    <div id="game-container" style="flex-grow:1; display:flex; align-items:center; position:relative;">
+        <canvas id="pongCanvas"></canvas>
+        <div id="win-msg">
+            <h1 id="winner-text"></h1>
+            <p id="high-score-notify" style="color: var(--accent); display:none;">NEW RECORD!</p>
+            <button onclick="resetGame()"
+                style="padding: 10px 30px; cursor: pointer; background: var(--primary); border: none; font-weight: bold;">PLAY
+                AGAIN</button>
+        </div>
+    </div>
+
+    <div id="ui-bottom">
+        <div class="score-box">
+            <span class="score-label">Player</span>
+            <span id="userScoreDisplay" class="score-val">0</span>
+        </div>
+        <div class="score-box">
+            <span class="score-label">CPU</span>
+            <span id="comScoreDisplay" class="score-val">0</span>
+        </div>
+        <div class="score-box high-score">
+            <span class="score-label">Personal Best</span>
+            <span id="highScoreDisplay" class="score-val">0</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("pongCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = 800; canvas.height = 450;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // --- CONFIG & STATE ---
+        const STORAGE_KEY = "pong_pro_highscore";
+        const CONFIG = {
+            basePaddleHeight: 100,
+            paddleWidth: 10,
+            ballRadius: 8,
+            colors: { paddle: "#D2B48C", ball: "#FFFFFF", powerUp: "#00FF00", obstacle: "#FFD700" }
+        };
+
+        const difficulties = {
+            easy: { ai: 0.05, ball: 6 },
+            medium: { ai: 0.09, ball: 8 },
+            hard: { ai: 0.16, ball: 11 }
+        };
+
+        let winPoints = 5, gameRunning = true, powerUpActive = false, powerUpTimer = null;
+        let highScore = localStorage.getItem(STORAGE_KEY) || 0;
+
+        const user = { x: 10, y: 175, width: CONFIG.paddleWidth, height: CONFIG.basePaddleHeight, score: 0, speed: 10 };
+        const com = { x: 780, y: 175, width: CONFIG.paddleWidth, height: CONFIG.basePaddleHeight, score: 0, speed: difficulties.medium.ai };
+        const ball = { x: 400, y: 225, radius: CONFIG.ballRadius, speed: difficulties.medium.ball, velocityX: 5, velocityY: 5 };
+        const obstacle = { x: 395, y: 150, width: 10, height: 100, speed: 2, dir: 1 };
+        const powerUp = { x: 0, y: 0, radius: 15 };
+
+        document.getElementById('highScoreDisplay').innerText = highScore;
+
+        // --- CORE FUNCTIONS ---
+        function playSound(f, t = 'sine', d = 0.1, v = 0.1) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+            o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
+            g.gain.setValueAtTime(v, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + d);
+        }
+
+        function saveScore() {
+            if (user.score > highScore) {
+                highScore = user.score;
+                localStorage.setItem(STORAGE_KEY, highScore);
+                document.getElementById('highScoreDisplay').innerText = highScore;
+                return true;
+            }
+            return false;
+        }
+
+        function resetHighScore() {
+            localStorage.removeItem(STORAGE_KEY);
+            highScore = 0;
+            document.getElementById('highScoreDisplay').innerText = 0;
+        }
+
+        // --- GAME ENGINE ---
+        function update() {
+            if (!gameRunning) return;
+
+            // Player movement
+            if (upPressed && user.y > 0) user.y -= user.speed;
+            if (downPressed && user.y < canvas.height - user.height) user.y += user.speed;
+
+            // Ball & AI
+            ball.x += ball.velocityX; ball.y += ball.velocityY;
+            com.y += (ball.y - (com.y + com.height / 2)) * com.speed;
+
+            // Obstacle logic
+            obstacle.y += obstacle.speed * obstacle.dir;
+            if (obstacle.y < 0 || obstacle.y > canvas.height - obstacle.height) obstacle.dir *= -1;
+            if (collision(ball, obstacle)) { ball.velocityX *= -1; playSound(200); canvas.classList.add('shake'); setTimeout(() => canvas.classList.remove('shake'), 150); }
+
+            // Wall collision
+            if (ball.y + ball.radius > canvas.height || ball.y - ball.radius < 0) { ball.velocityY *= -1; playSound(250); }
+
+            // Paddle collision
+            let p = (ball.x < canvas.width / 2) ? user : com;
+            if (collision(ball, p)) {
+                playSound(450, 'square');
+                let collidePoint = (ball.y - (p.y + p.height / 2)) / (p.height / 2);
+                let angle = (Math.PI / 4) * collidePoint;
+                let dir = (ball.x < canvas.width / 2) ? 1 : -1;
+                ball.velocityX = dir * ball.speed * Math.cos(angle);
+                ball.velocityY = ball.speed * Math.sin(angle);
+                ball.speed += 0.2;
+            }
+
+            // Scoring
+            if (ball.x - ball.radius < 0) { com.score++; resetBall(); updateUI(); }
+            else if (ball.x + ball.radius > canvas.width) { user.score++; resetBall(); updateUI(); }
+        }
+
+        function updateUI() {
+            document.getElementById('userScoreDisplay').innerText = user.score;
+            document.getElementById('comScoreDisplay').innerText = com.score;
+
+            if (user.score >= winPoints || com.score >= winPoints) {
+                gameRunning = false;
+                const isNewRecord = saveScore();
+                document.getElementById("win-msg").style.display = "block";
+                document.getElementById("winner-text").innerText = user.score >= winPoints ? "YOU WIN! 🏆" : "CPU WINS! 🤖";
+                document.getElementById("high-score-notify").style.display = isNewRecord ? "block" : "none";
+            }
+        }
+
+        function collision(b, p) {
+            return b.x + b.radius > p.x && b.x - b.radius < p.x + p.width && b.y + b.radius > p.y && b.y - b.radius < p.y + p.height;
+        }
+
+        function resetBall() {
+            ball.x = 400; ball.y = 225; ball.velocityX = (ball.velocityX > 0 ? -1 : 1) * 7;
+            let level = document.querySelector('.active').id.split('-')[1];
+            ball.speed = difficulties[level].ball;
+        }
+
+        function resetGame() {
+            user.score = 0; com.score = 0; gameRunning = true;
+            document.getElementById("win-msg").style.display = "none";
+            updateUI(); resetBall();
+        }
+
+        function setDifficulty(level) {
+            com.speed = difficulties[level].ai; ball.speed = difficulties[level].ball;
+            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + level).classList.add('active');
+            resetBall();
+        }
+
+        let upPressed = false, downPressed = false;
+        window.addEventListener("keydown", e => { if (e.key === "ArrowUp") upPressed = true; if (e.key === "ArrowDown") downPressed = true; });
+        window.addEventListener("keyup", e => { if (e.key === "ArrowUp") upPressed = false; if (e.key === "ArrowDown") downPressed = false; });
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "rgba(255,255,255,0.1)";
+            ctx.setLineDash([10, 10]); ctx.beginPath(); ctx.moveTo(400, 0); ctx.lineTo(400, 450); ctx.stroke();
+            ctx.fillStyle = CONFIG.colors.obstacle; ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            ctx.fillStyle = CONFIG.colors.paddle; ctx.fillRect(user.x, user.y, user.width, user.height); ctx.fillRect(com.x, com.y, com.width, com.height);
+            ctx.fillStyle = CONFIG.colors.ball; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2); ctx.fill();
+            requestAnimationFrame(render);
+        }
+
+        setInterval(update, 1000 / 60);
+        render();
+    </script>
+</body>
+
+</html>
