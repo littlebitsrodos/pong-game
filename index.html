@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="el">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Table Tennis Pro - Neon Edition</title>
+    <style>
+        :root {
+            --primary: #05EDFF;
+            --secondary: #FF2A6D;
+            --accent: #FFD700;
+            --bg-dark: #050505;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            margin: 0;
+            background: radial-gradient(circle at center, #1b2735 0%, #090a0f 100%);
+            color: white;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+
+        #ui-top,
+        #ui-bottom {
+            width: 100%;
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        #ui-top {
+            padding: 15px 0;
+            /* Reduced padding for mobile */
+            gap: 15px;
+            border-bottom: 1px solid rgba(5, 237, 255, 0.2);
+            flex-wrap: wrap;
+            /* Allow wrapping on small screens */
+        }
+
+        #ui-bottom {
+            padding: 10px 0;
+            gap: 30px;
+            border-top: 1px solid rgba(5, 237, 255, 0.1);
+            position: fixed;
+            bottom: 0;
+        }
+
+        .btn-group {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 4px;
+            display: flex;
+            gap: 4px;
+        }
+
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #aaa;
+            transition: all 0.2s ease;
+            border-radius: 4px;
+            font-weight: 500;
+            font-family: inherit;
+        }
+
+        button:hover {
+            color: white;
+        }
+
+        button.active {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 0 15px var(--primary);
+        }
+
+        button.active-secondary {
+            background: var(--secondary);
+            color: #fff;
+            box-shadow: 0 0 15px var(--secondary);
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        canvas {
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 80px rgba(5, 237, 255, 0.15);
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 4px;
+            max-width: 100%;
+            max-height: 70vh;
+            /* Leave room for UI */
+        }
+
+        .score-box {
+            text-align: center;
+            min-width: 80px;
+            position: relative;
+        }
+
+        .score-val {
+            font-size: 32px;
+            font-weight: 800;
+            display: block;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+
+        .score-label {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        /* Mobile controls overlay */
+        .touch-zone {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            z-index: 10;
+            display: none;
+            /* Hidden by default, shown on touch devices */
+        }
+
+        .touch-left {
+            left: 0;
+            width: 50%;
+            border-right: 1px dashed rgba(255, 255, 255, 0.05);
+        }
+
+        .touch-right {
+            right: 0;
+            width: 50%;
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            .touch-zone {
+                display: block;
+            }
+
+            .btn-group button {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+
+            #ui-top {
+                gap: 10px;
+            }
+
+            h1#winner-text {
+                font-size: 32px;
+            }
+        }
+
+        #win-msg,
+        #start-screen {
+            position: absolute;
+            display: none;
+            background: rgba(10, 10, 20, 0.95);
+            padding: 40px;
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 50px var(--primary);
+            text-align: center;
+            border-radius: 20px;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #start-screen {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 60px 80px;
+        }
+
+        .main-title {
+            font-size: 64px;
+            margin: 0;
+            background: linear-gradient(to right, #fff, var(--primary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        .start-btn {
+            background: var(--primary);
+            color: #000;
+            font-size: 24px;
+            font-weight: 800;
+            padding: 15px 40px;
+            border-radius: 50px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 0 20px rgba(5, 237, 255, 0.4);
+            text-transform: uppercase;
+        }
+
+        .start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 40px rgba(5, 237, 255, 0.6);
+        }
+
+        #winner-text {
+            font-size: 48px;
+            margin: 0 0 20px 0;
+            white-space: nowrap;
+            background: linear-gradient(to right, #fff, var(--primary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .notification {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 10px currentColor;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 30;
+        }
+
+        .shake {
+            animation: shake 0.2s cubic-bezier(.36, .07, .19, .97) both;
+        }
+
+        @keyframes shake {
+
+            10%,
+            90% {
+                transform: translate3d(-1px, 0, 0);
+            }
+
+            20%,
+            80% {
+                transform: translate3d(2px, 0, 0);
+            }
+
+            30%,
+            50%,
+            70% {
+                transform: translate3d(-4px, 0, 0);
+            }
+
+            40%,
+            60% {
+                transform: translate3d(4px, 0, 0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-top">
+        <div class="btn-group">
+            <button onclick="setMode('1P')" id="btn-mode-1p" class="active">1P</button>
+            <button onclick="setMode('2P')" id="btn-mode-2p" class="active-secondary">2P</button>
+        </div>
+        <div class="btn-group">
+            <button onclick="setDifficulty('easy')" id="btn-easy">Easy</button>
+            <button onclick="setDifficulty('medium')" id="btn-medium" class="active">Med</button>
+            <button onclick="setDifficulty('hard')" id="btn-hard">Hard</button>
+        </div>
+        <div class="input-group">
+            <span style="font-size: 12px; color: #888; text-transform: uppercase;">Target</span>
+            <input type="number" id="winLimit" value="5" min="1" max="99" onchange="updateWinLimit()"
+                style="width:30px; background:transparent; color:white; border:none; font-weight:bold; text-align:center; font-size:16px; outline:none;">
+        </div>
+        <button onclick="resetHighScore()"
+            style="font-size: 11px; background: none; border: 1px solid rgba(255, 255, 255, 0.2); color: #888; cursor: pointer; padding: 4px 8px; border-radius: 4px;">CLEAR
+            BEST</button>
+    </div>
+
+    <div id="game-container"
+        style="flex-grow:1; display:flex; align-items:center; position:relative; width: 100%; justify-content: center;">
+        <canvas id="pongCanvas"></canvas>
+
+        <!-- Touch Controls -->
+        <div class="touch-zone touch-left" id="touch-left"></div>
+        <div class="touch-zone touch-right" id="touch-right"></div>
+
+        <div id="toast" class="notification"></div>
+
+        <div id="start-screen">
+            <h1 class="main-title">NEON PONG</h1>
+            <button onclick="startGame()" class="start-btn">START GAME</button>
+        </div>
+
+        <div id="win-msg">
+            <h1 id="winner-text"></h1>
+            <p id="high-score-notify"
+                style="color: var(--accent); font-weight: bold; font-size: 24px; margin-bottom: 30px; display:none;">NEW
+                RECORD! 🏆</p>
+            <button onclick="resetGame()"
+                style="padding: 12px 40px; cursor: pointer; background: var(--primary); border: none; font-weight: bold; font-size: 16px; border-radius: 30px; box-shadow: 0 0 20px rgba(5, 237, 255, 0.4); color: #000; transition: transform 0.1s;">PLAY
+                AGAIN</button>
+        </div>
+    </div>
+
+    <div id="ui-bottom">
+        <div class="score-box">
+            <span id="p1ScoreDisplay" class="score-val" style="color: var(--primary)">0</span>
+            <span class="score-label" id="p1Label">PLAYER 1</span>
+        </div>
+        <div class="score-box high-score">
+            <span id="streakDisplay" class="score-val" style="color: #fff; font-size: 24px;">0</span>
+            <span class="score-label">Rally</span>
+        </div>
+        <div class="score-box">
+            <span id="p2ScoreDisplay" class="score-val" style="color: var(--secondary)">0</span>
+            <span class="score-label" id="p2Label">CPU</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("pongCanvas");
+        const ctx = canvas.getContext("2d");
+        // Responsive resolution
+        const baseWidth = 900;
+        const baseHeight = 500;
+        canvas.width = baseWidth; canvas.height = baseHeight;
+
+        function resizeLayout() {
+            const aspect = baseWidth / baseHeight;
+            let w = Math.min(window.innerWidth * 0.95, baseWidth);
+            let h = w / aspect;
+
+            // If height is too big, constrain by height
+            if (h > window.innerHeight * 0.70) {
+                h = window.innerHeight * 0.70;
+                w = h * aspect;
+            }
+
+            canvas.style.width = w + "px";
+            canvas.style.height = h + "px";
+        }
+        window.addEventListener('resize', resizeLayout);
+        resizeLayout();
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // --- CONFIG & STATE ---
+        const CONFIG = {
+            paddleHeight: 100,
+            paddleWidth: 12,
+            ballRadius: 10,
+            colors: {
+                p1: "#05EDFF",
+                p2: "#FF2A6D",
+                ball: "#FFFFFF",
+                obstacle: "#FFD700",
+                net: "rgba(255, 255, 255, 0.1)",
+                powerUp: "#00FF00",
+                powerUpSlow: "#FFFF00"
+            }
+        };
+
+        const difficulties = {
+            easy: { ai: 0.06, ball: 7 },
+            medium: { ai: 0.12, ball: 10 },
+            hard: { ai: 0.25, ball: 14 }
+        };
+
+        // Game State
+        let state = {
+            mode: '1P', // '1P' or '2P'
+            winPoints: 5,
+            running: false, // Changed to false initially
+            gameStarted: false, // New flag for start screen
+            highScore: localStorage.getItem("pong_pro_highscore") || 0,
+            rally: 0,
+            maxRally: 0
+        };
+
+        // Entities
+        const p1 = { x: 20, y: 200, width: CONFIG.paddleWidth, height: CONFIG.paddleHeight, score: 0, speed: 12, color: CONFIG.colors.p1, originalHeight: CONFIG.paddleHeight };
+        const p2 = { x: canvas.width - 32, y: 200, width: CONFIG.paddleWidth, height: CONFIG.paddleHeight, score: 0, speed: difficulties.medium.ai, color: CONFIG.colors.p2, originalHeight: CONFIG.paddleHeight };
+        const ball = { x: canvas.width / 2, y: canvas.height / 2, radius: CONFIG.ballRadius, speed: difficulties.medium.ball, velocityX: 7, velocityY: 7 };
+        const obstacle = { x: canvas.width / 2 - 5, y: 150, width: 10, height: 120, speed: 3, dir: 1 };
+
+        let powerUps = [];
+        let particles = [];
+        let powerUpTimer = 0;
+        let activeEffects = [];
+
+        // Input State
+        const keys = { w: false, s: false, up: false, down: false };
+        const touch = { leftY: null, rightY: null };
+
+        // --- MECHANICS ---
+
+        function startGame() {
+            state.gameStarted = true;
+            state.running = true;
+            document.getElementById('start-screen').style.display = 'none';
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            resetBall();
+        }
+
+        function spawnPowerUp() {
+            if (!state.running) return;
+            // 30% chance to spawn every 5 seconds if none exist
+            if (powerUps.length === 0 && Math.random() < 0.3) {
+                const type = Math.random() > 0.5 ? 'BIG' : 'SLOW';
+                powerUps.push({
+                    x: canvas.width / 2 + (Math.random() * 200 - 100),
+                    y: Math.random() * (canvas.height - 100) + 50,
+                    radius: 15,
+                    type: type,
+                    life: 600 // Frames until despawn
+                });
+            }
+        }
+        setInterval(spawnPowerUp, 5000);
+
+        function activatePowerUp(p, type) {
+            playSound(1200, 'triangle', 0.5);
+            showToast(type === 'BIG' ? "PADDLE EXPAND!" : "SLOW MOTION!");
+
+            if (type === 'BIG') {
+                p.height = p.originalHeight * 1.5;
+                // Auto revert after 8s
+                setTimeout(() => { p.height = p.originalHeight; }, 8000);
+            } else if (type === 'SLOW') {
+                const oldSpeed = ball.speed;
+                ball.speed *= 0.6; // Slow down
+                // Make ball look different
+                ball.color = "#FFFF00";
+                setTimeout(() => {
+                    const level = document.querySelectorAll('.btn-group')[1].querySelector('.active').id.split('-')[1];
+                    ball.speed = Math.max(oldSpeed, difficulties[level].ball);
+                    ball.color = "#FFFFFF";
+                }, 5000);
+            }
+        }
+
+        function createParticles(x, y, color, count = 10, speed = 2) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * speed * 4,
+                    vy: (Math.random() - 0.5) * speed * 4,
+                    life: 1.0,
+                    color: color,
+                    size: Math.random() * 3 + 1
+                });
+            }
+        }
+
+        function update() {
+            if (!state.running) return;
+
+            // -- PLAYER 1 INPUT --
+            // 1P Mode: Arrows, Touch, or W/S can control P1
+            // 2P Mode: Only W/S/LeftTouch controls P1
+            let p1Move = 0;
+            if (state.mode === '1P') {
+                if (keys.w || keys.up) p1Move = -1;
+                else if (keys.s || keys.down) p1Move = 1;
+
+                // Touch Override
+                if (touch.leftY !== null || touch.rightY !== null) {
+                    const tY = touch.leftY !== null ? touch.leftY : touch.rightY;
+                    p1.y = tY - p1.height / 2; // Direct positioning
+                }
+            } else {
+                // 2P Mode P1
+                if (keys.w) p1Move = -1;
+                else if (keys.s) p1Move = 1;
+                if (touch.leftY !== null) p1.y = touch.leftY - p1.height / 2;
+            }
+
+            if (p1Move !== 0) p1.y += p1Move * p1.speed;
+
+            // -- PLAYER 2 INPUT (AI or Human) --
+            if (state.mode === '2P') {
+                let p2Move = 0;
+                if (keys.up) p2Move = -1;
+                else if (keys.down) p2Move = 1;
+                p2.y += p2Move * p1.speed; // Use same speed as P1 for fairness
+                if (touch.rightY !== null) p2.y = touch.rightY - p2.height / 2;
+            } else {
+                // AI Logic
+                let targetY = ball.y - (p2.height / 2);
+                let trackingSpeed = p2.speed * (ball.x > canvas.width / 2 ? 1.2 : 0.6);
+                p2.y += (targetY - p2.y) * trackingSpeed;
+            }
+
+            // Clamp Paddles
+            p1.y = Math.max(0, Math.min(canvas.height - p1.height, p1.y));
+            p2.y = Math.max(0, Math.min(canvas.height - p2.height, p2.y));
+
+            // -- BALL PHYSICS --
+            ball.x += ball.velocityX;
+            ball.y += ball.velocityY;
+
+            // Wall Collisions
+            if (ball.y + ball.radius > canvas.height) {
+                ball.y = canvas.height - ball.radius;
+                ball.velocityY *= -1;
+                createParticles(ball.x, ball.y, '#FFF', 5);
+                playSound(300, 'sine', 0.05);
+            } else if (ball.y - ball.radius < 0) {
+                ball.y = ball.radius;
+                ball.velocityY *= -1;
+                createParticles(ball.x, ball.y, '#FFF', 5);
+                playSound(300, 'sine', 0.05);
+            }
+
+            // Paddle Collisions
+            let player = (ball.x < canvas.width / 2) ? p1 : p2;
+            if (collision(ball, player)) {
+
+                // Directional Check: Only collide if moving TOWARDS the paddle
+                // P1 is on left (needs negative velocity to hit), P2 on right (needs positive)
+                const validCollision = (player === p1 && ball.velocityX < 0) || (player === p2 && ball.velocityX > 0);
+
+                if (validCollision) {
+                    // Ejection Logic: Push ball out of paddle to prevent sticking
+                    if (player === p1) {
+                        ball.x = player.x + player.width + ball.radius;
+                    } else {
+                        ball.x = player.x - ball.radius;
+                    }
+
+                    // Dynamic Angle
+                    let collidePoint = (ball.y - (player.y + player.height / 2));
+                    collidePoint = collidePoint / (player.height / 2);
+                    let angle = (Math.PI / 4) * collidePoint;
+                    let dir = (ball.x < canvas.width / 2) ? 1 : -1;
+
+                    ball.velocityX = dir * ball.speed * Math.cos(angle);
+                    ball.velocityY = ball.speed * Math.sin(angle);
+                    ball.speed += 0.5; // Juice: Speed up
+
+                    // Effects
+                    createParticles(ball.x, ball.y, player.color, 15);
+                    state.rally++;
+                    document.getElementById('streakDisplay').innerText = state.rally;
+
+                    let freq = (player === p1) ? 600 : 400;
+                    playSound(freq, 'square', 0.1);
+                }
+            }
+
+            // Obstacle logic
+            obstacle.y += obstacle.speed * obstacle.dir;
+            if (obstacle.y < 50 || obstacle.y > canvas.height - obstacle.height - 50) obstacle.dir *= -1;
+            if (collision(ball, obstacle)) {
+                ball.velocityX *= -1;
+                createParticles(ball.x, ball.y, CONFIG.colors.obstacle, 10);
+                playSound(200, 'sawtooth', 0.2);
+                canvas.classList.add('shake');
+                setTimeout(() => canvas.classList.remove('shake'), 200);
+            }
+
+            // Powerups Logic
+            for (let i = powerUps.length - 1; i >= 0; i--) {
+                let pu = powerUps[i];
+                pu.life--;
+
+                // Ball hits powerup
+                let dx = ball.x - pu.x;
+                let dy = ball.y - pu.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < ball.radius + pu.radius) {
+                    // Activate for the player who hit the ball last (based on direction)
+                    let beneficiary = ball.velocityX > 0 ? p1 : p2;
+                    activatePowerUp(beneficiary, pu.type);
+                    powerUps.splice(i, 1);
+                } else if (pu.life <= 0) {
+                    powerUps.splice(i, 1);
+                }
+            }
+
+            // Scoring
+            if (ball.x - ball.radius < 0) {
+                score(p2);
+            } else if (ball.x + ball.radius > canvas.width) {
+                score(p1);
+            }
+
+            // Particles Logic
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.03;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function score(player) {
+            player.score++;
+            createParticles(ball.x, ball.y, player.color, 30, 5);
+            playSound(player === p1 ? 800 : 150, 'sawtooth', 0.4);
+            resetBall();
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('p1ScoreDisplay').innerText = p1.score;
+            document.getElementById('p2ScoreDisplay').innerText = p2.score;
+            state.rally = 0; document.getElementById('streakDisplay').innerText = 0;
+
+            if (p1.score >= state.winPoints || p2.score >= state.winPoints) {
+                state.running = false;
+                let winnerName = (p1.score >= state.winPoints) ? "PLAYER 1 WINS!" : (state.mode === '2P' ? "PLAYER 2 WINS!" : "CPU WINS!");
+                if (state.mode === '1P' && p1.score > state.highScore) {
+                    localStorage.setItem("pong_pro_highscore", p1.score);
+                    document.getElementById("high-score-notify").style.display = "block";
+                }
+
+                document.getElementById("win-msg").style.display = "block";
+                document.getElementById("winner-text").innerText = winnerName;
+                playSound(1000, 'square', 0.5);
+            }
+        }
+
+        function collision(b, p) {
+            return b.x + b.radius > p.x && b.x - b.radius < p.x + p.width && b.y + b.radius > p.y && b.y - b.radius < p.y + p.height;
+        }
+
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.velocityX = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 2 + 5);
+            // Fix: Target the second button group for difficulty (since the first one is now Mode)
+            const level = document.querySelectorAll('.btn-group')[1].querySelector('.active').id.split('-')[1];
+            ball.speed = difficulties[level].ball;
+            ball.velocityY = (Math.random() > 0.5 ? 1 : -1) * ball.speed;
+            ball.color = "#FFFFFF"; // Reset color
+        }
+
+        function resetGame() {
+            p1.score = 0; p2.score = 0; state.running = true;
+            p1.height = p1.originalHeight; p2.height = p2.originalHeight;
+            document.getElementById("win-msg").style.display = "none";
+            updateUI(); resetBall();
+        }
+
+        // --- CONTROLS ---
+        window.addEventListener("keydown", e => {
+            if (e.key === "ArrowUp") keys.up = true;
+            if (e.key === "ArrowDown") keys.down = true;
+            if (e.key === "w" || e.key === "W") keys.w = true;
+            if (e.key === "s" || e.key === "S") keys.s = true;
+        });
+
+        window.addEventListener("keyup", e => {
+            if (e.key === "ArrowUp") keys.up = false;
+            if (e.key === "ArrowDown") keys.down = false;
+            if (e.key === "w" || e.key === "W") keys.w = false;
+            if (e.key === "s" || e.key === "S") keys.s = false;
+        });
+
+        // Touch Logic
+        function handleTouch(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const scaleY = canvas.height / rect.height;
+
+            touch.leftY = null;
+            touch.rightY = null;
+
+            for (let i = 0; i < e.touches.length; i++) {
+                const t = e.touches[i];
+                const x = t.clientX;
+                const y = (t.clientY - rect.top) * scaleY;
+
+                if (x < window.innerWidth / 2) touch.leftY = y;
+                else touch.rightY = y;
+            }
+        }
+
+        const leftZone = document.getElementById('touch-left');
+        const rightZone = document.getElementById('touch-right');
+
+        // Bind to window to catch drags outside zones
+        window.addEventListener('touchstart', handleTouch, { passive: false });
+        window.addEventListener('touchmove', handleTouch, { passive: false });
+        window.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0) { touch.leftY = null; touch.rightY = null; }
+            else handleTouch(e);
+        });
+
+
+        // --- UI FUNCTIONS ---
+        function setMode(m) {
+            state.mode = m;
+            document.getElementById('btn-mode-1p').className = m === '1P' ? 'active' : '';
+            document.getElementById('btn-mode-2p').className = m === '2P' ? 'active-secondary' : '';
+
+            document.getElementById('p2Label').innerText = m === '1P' ? "CPU" : "PLAYER 2";
+            resetGame();
+            showToast(m === '1P' ? "1 PLAYER MODE" : "2 PLAYER MODE");
+        }
+
+        function setDifficulty(level) {
+            if (state.mode === '2P') return; // Difficulty only for AI
+            p2.speed = difficulties[level].ai;
+            ball.speed = difficulties[level].ball;
+            document.querySelectorAll('#ui-top .btn-group:nth-child(2) button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + level).classList.add('active');
+            resetBall();
+        }
+
+        function updateWinLimit() {
+            const val = parseInt(document.getElementById('winLimit').value);
+            if (val > 0) state.winPoints = val;
+        }
+
+        function showToast(msg) {
+            const el = document.getElementById('toast');
+            el.innerText = msg;
+            el.style.opacity = 1;
+            setTimeout(() => el.style.opacity = 0, 2000);
+        }
+
+        function playSound(f, t = 'sine', d = 0.1, v = 0.1) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+            o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
+            g.gain.setValueAtTime(v, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + d);
+        }
+
+        // --- RENDER LOOP ---
+        function render() {
+            update();
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Net
+            ctx.strokeStyle = CONFIG.colors.net;
+            ctx.lineWidth = 4;
+            ctx.setLineDash([15, 15]);
+            ctx.beginPath(); ctx.moveTo(canvas.width / 2, 0); ctx.lineTo(canvas.width / 2, canvas.height); ctx.stroke();
+
+            // PowerUps
+            ctx.shadowBlur = 10;
+            for (let pu of powerUps) {
+                ctx.fillStyle = pu.type === 'BIG' ? CONFIG.colors.powerUp : CONFIG.colors.powerUpSlow;
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath();
+                ctx.arc(pu.x, pu.y, pu.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Icon
+                ctx.fillStyle = "#000";
+                ctx.font = "bold 16px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(pu.type === 'BIG' ? "↑" : "S", pu.x, pu.y);
+            }
+
+            // Glow effects
+            ctx.shadowBlur = 20;
+
+            // Obstacle
+            ctx.shadowColor = CONFIG.colors.obstacle;
+            ctx.fillStyle = CONFIG.colors.obstacle;
+            ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+
+            // Paddles
+            ctx.shadowColor = p1.color;
+            ctx.fillStyle = p1.color;
+            ctx.fillRect(p1.x, p1.y, p1.width, p1.height);
+
+            ctx.shadowColor = p2.color;
+            ctx.fillStyle = p2.color;
+            ctx.fillRect(p2.x, p2.y, p2.width, p2.height);
+
+            // Ball
+            ctx.shadowColor = ball.color || "#FFF";
+            ctx.fillStyle = ball.color || "#FFF";
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2); ctx.fill();
+
+            // Particles
+            for (let p of particles) {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.shadowBlur = 0; // Performance
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+
+            requestAnimationFrame(render);
+        }
+
+        resetBall();
+        render();
+    </script>
+</body>
+
+</html>
